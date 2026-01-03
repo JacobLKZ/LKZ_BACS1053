@@ -1,0 +1,85 @@
+--Terminal Settings
+SET LINESIZE 100;
+SET PAGESIZE 300;
+
+--date and time settings
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
+ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'HH24:MI';
+
+--COLUMN Settings
+COLUMN genre FORMAT A11 
+COLUMN "July" FORMAT 9,999,999.99 HEADING "July Sales"
+COLUMN "August" FORMAT 9,999,999.99 HEADING "August Sales"
+COLUMN "total_sale" FORMAT 9,999,999.99 HEADING "Total Sales"
+COLUMN "prev_year_total" FORMAT 9,999,999.99 HEADING "Previous Sales"
+COLUMN "Difference" FORMAT 9,999,999.99 HEADING "Difference"
+
+ 
+cl scr
+
+PROMPT +--------------------------------------------------------------+
+PROMPT |         Movie Genre Sales Amount (RM) Report                 |
+PROMPT +--------------------------------------------------------------+
+PROMPT | Show Year 2021 OR 2022 OR 2023 [2nd and 3rd year input 0]    | 
+PROMPT | Compare Year 2021 and 2022     [3rd year input 0]            | 
+PROMPT | Compare Year 2022 and 2023     [1st year input 0]            |
+PROMPT | Compare Year 2021,2022,2023    [Normal keyin 1st,2nd,3rd]    |
+PROMPT +---------------------------------------------------------------+
+PROMPT
+PROMPT
+
+-- Get input from user
+ACCEPT v_year1 PROMPT 'Enter the 1st Year in (2021/2022/2023):'
+ACCEPT v_year2 PROMPT 'Enter the 2nd Year in (2021/2022/2023):'
+ACCEPT v_year3 PROMPT 'Enter the 3rd Year in (2021/2022/2023):'
+
+
+--Title 
+TTITLE ON
+TTITLE CENTER 'Movie Genre Compare Sales Amount (RM) Report' SKIP 1-
+       CENTER '=====================================================================' SKIP 1-
+       LEFT 'DATE: '_DATE -
+       RIGHT 'PAGE:' FORMAT 999 SQL.PNO SKIP 2 -
+
+BREAK ON genre SKIP 1 ON YEAR ON July ON August ON prev_year_total ON "Difference"
+COMPUTE SUM LABEL "Total" OF total_sale ON genre
+
+
+-- Create View
+CREATE OR REPLACE VIEW movie_sales_view AS
+SELECT 
+    m.genre,
+    EXTRACT(YEAR FROM tr.date_n_time) AS "Year",
+    SUM(CASE WHEN EXTRACT(MONTH FROM tr.date_n_time) = 7 THEN tr.grand_total ELSE 0 END) AS July,
+    SUM(CASE WHEN EXTRACT(MONTH FROM tr.date_n_time) = 8 THEN tr.grand_total ELSE 0 END) AS August,
+    SUM(tr.grand_total) AS total_sale,
+    LAG(SUM(tr.grand_total)) OVER (PARTITION BY m.genre ORDER BY EXTRACT(YEAR FROM tr.date_n_time)) AS prev_year_total,
+    SUM(tr.grand_total) - LAG(SUM(tr.grand_total)) OVER (PARTITION BY m.genre ORDER BY EXTRACT(YEAR FROM tr.date_n_time)) AS "Difference"
+FROM
+    movie m
+JOIN 
+    movie_screening ms ON m.movie_id = ms.movie_id
+JOIN 
+    ticket_details td ON ms.show_id = td.show_id
+JOIN 
+    ticket t ON td.t_details_id = t.t_details_id
+JOIN 
+    ticket_claim_list tcl ON t.ticket_id = tcl.ticket_id
+JOIN 
+    ticket_claim tc ON tcl.t_claim_no = tc.t_claim_no
+JOIN 
+    transaction tr ON tc.t_claim_no = tr.t_claim_no
+WHERE 
+    EXTRACT(YEAR FROM tr.date_n_time) IN ('&v_year1', '&v_year2','&v_year3') -- Filter for the desired years
+GROUP BY 
+    m.genre, EXTRACT(YEAR FROM tr.date_n_time)
+ORDER BY 
+    m.genre, "Year";
+
+--Display view
+SELECT * FROM movie_sales_view;
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF

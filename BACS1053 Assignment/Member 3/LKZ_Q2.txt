@@ -1,0 +1,186 @@
+CL SCR
+
+SET LINESIZE 148
+SET PAGESIZE 10
+SET VERIFY OFF
+SET FEEDBACK OFF
+
+COLUMN "Rank" FORMAT 999
+COLUMN "# of Cxls" HEADING '  Number of  |Cancellations' 
+COLUMN "% of Cxls(Rental/Ticket/Food)" HEADING 'Percentage of number of|cancellations within the|same revenue source (%)'
+COLUMN "% of Cxls(Overall)" HEADING '  Percentage of  |  number of all  |cancellations (%)'
+COLUMN "% of Purchase" HEADING '  Percentage of  |all purchases of|the same item (%)'
+
+PROMPT '[1] Rental'
+PROMPT '[2] Ticket'
+PROMPT '[3] Food Orders'
+ACCEPT v_cxl_src NUMBER PROMPT 'Enter revenue source to view its cancellations (1/2/3): '
+ACCEPT v_cxl_year PROMPT 'Enter year (2021/2022/2023): '
+
+TTITLE LEFT 'Date: ' _DATE -
+       CENTER 'Top 3 Most Cancelled Items in '&v_cxl_year'' -
+       RIGHT 'Page:' FORMAT 999 SQL.PNO SKIP 2
+
+VAR total_rental_cxls NUMBER;
+BEGIN
+	SELECT COUNT(a.cxl_no)
+	INTO :total_rental_cxls
+	FROM cancellation a JOIN rental b ON a.rental_id = b.rental_id
+			    JOIN transaction c ON b.rental_id = c.rental_id
+	WHERE EXTRACT(YEAR FROM c.date_n_time) = '&v_cxl_year';
+END;
+/
+
+VAR total_ticket_cxls NUMBER;
+BEGIN
+	SELECT COUNT(a.cxl_no)
+	INTO :total_ticket_cxls
+	FROM cancellation a JOIN ticket_claim_list b ON a.t_book_id = b.t_book_id
+			    JOIN ticket_claim c ON b.t_claim_no = c.t_claim_no
+			    JOIN transaction d ON c.t_claim_no = d.t_claim_no
+	WHERE EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year';
+END;
+/
+
+VAR total_food_cxls NUMBER;
+BEGIN
+	SELECT COUNT(a.cxl_no)
+	INTO :total_food_cxls
+	FROM cancellation a JOIN food_order_list b ON a.order_id = b.order_id
+			    JOIN food_order c ON b.f_order_no = c.f_order_no
+			    JOIN transaction d ON c.f_order_no = d.f_order_no
+	WHERE EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year';
+END;
+/
+
+CREATE OR REPLACE VIEW total_rental_hall_type_view
+AS SELECT c.hall_type, COUNT(*) "# of Total Rentals"
+FROM rental a JOIN hall_schedule b ON a.skd_slot = b.skd_slot
+	      JOIN hall c ON b.hall_id = c.hall_id
+	      JOIN transaction d ON a.rental_id = d.rental_id
+WHERE c.hall_type IN 
+	(SELECT d.hall_type
+	FROM cancellation a JOIN rental b ON a.rental_id = b.rental_id
+		    	    JOIN hall_schedule c ON b.skd_slot = c.skd_slot
+		    	    JOIN hall d ON c.hall_id = d.hall_id
+			    JOIN transaction e ON b.rental_id = e.rental_id
+	WHERE EXTRACT(YEAR FROM e.date_n_time) = '&v_cxl_year'
+	GROUP BY d.hall_type)
+      AND EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year'
+GROUP BY c.hall_type;
+
+CREATE OR REPLACE VIEW total_ticket_movie_view
+AS SELECT d.title, COUNT(*) "# of Total Tickets"
+FROM ticket a JOIN ticket_details b ON a.t_details_id = b.t_details_id
+	      JOIN movie_screening c ON b.show_id = c.show_id
+	      JOIN movie d ON c.movie_id = d.movie_id
+	      JOIN ticket_claim_list e ON a.ticket_id = e.ticket_id
+	      JOIN ticket_claim f ON e.t_claim_no = f.t_claim_no
+	      JOIN transaction g ON f.t_claim_no = g.t_claim_no
+WHERE d.title IN 
+	(SELECT g.title
+	FROM cancellation a JOIN ticket_claim_list b ON a.t_book_id = b.t_book_id
+		    	    JOIN ticket c ON b.ticket_id = c.ticket_id
+		    	    JOIN ticket_details d ON c.t_details_id = d.t_details_id
+		    	    JOIN movie_screening e ON d.show_id = e.show_id
+		    	    JOIN hall_schedule f ON e.skd_slot = f.skd_slot
+		    	    JOIN movie g ON e.movie_id = g.movie_id
+			    JOIN ticket_claim h ON b.t_claim_no = h.t_claim_no
+			    JOIN transaction i ON h.t_claim_no = i.t_claim_no
+	WHERE EXTRACT(YEAR FROM i.date_n_time) = '&v_cxl_year'
+	GROUP BY g.title)
+       AND EXTRACT(YEAR FROM g.date_n_time) = '&v_cxl_year'
+GROUP BY d.title;
+
+CREATE OR REPLACE VIEW total_order_menu_view
+AS SELECT b.description, COUNT(*) "# of Total Orders"
+FROM food_order_list a JOIN food_menu b ON a.menu_id = b.menu_id
+		       JOIN food_order c ON a.f_order_no = c.f_order_no
+		       JOIN transaction d ON c.f_order_no = d.f_order_no
+WHERE b.description IN 
+	(SELECT description
+	FROM cancellation a JOIN food_order_list b ON a.order_id = b.order_id
+			    JOIN food_order c ON b.f_order_no = c.f_order_no
+			    JOIN transaction d ON c.f_order_no = d.f_order_no
+			    JOIN food_menu e ON b.menu_id = e.menu_id
+	WHERE EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year'
+	GROUP BY e.description)
+       AND EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year'
+GROUP BY b.description;
+
+SELECT ranking "Rank",
+       "Item",
+       "# of Cxls",
+       total_refund "Total Refund (RM)",
+       "% of Cxls(Rental/Ticket/Food)",
+       "% of Cxls(Overall)",
+       "% of Purchase"
+FROM(
+	SELECT ranking, "Item", "# of Cxls", total_refund, "% of Cxls(Rental/Ticket/Food)", "% of Cxls(Overall)", "% of Purchase", revenue_src
+	FROM(
+		SELECT RANK() OVER (ORDER BY COUNT(cxl_no) / "# of Total Rentals" * 100 DESC) ranking,
+		       d.hall_type "Item",
+		       1 AS revenue_src,
+		       COUNT(cxl_no) "# of Cxls",
+		       ROUND(COUNT(cxl_no)  / :total_rental_cxls * 100, 2) "% of Cxls(Rental/Ticket/Food)",
+		       ROUND(COUNT(cxl_no) / (:total_rental_cxls + :total_ticket_cxls + :total_food_cxls) * 100, 2) "% of Cxls(Overall)",
+		       ROUND(COUNT(cxl_no) / "# of Total Rentals" * 100, 2) "% of Purchase",
+		       SUM(a.refund) total_refund
+		FROM cancellation a JOIN rental b ON a.rental_id = b.rental_id
+				    JOIN hall_schedule c ON b.skd_slot = c.skd_slot
+				    JOIN hall d ON c.hall_id = d.hall_id
+				    JOIN total_rental_hall_type_view e ON d.hall_type = e.hall_type
+				    JOIN transaction f ON b.rental_id = f.rental_id
+		WHERE EXTRACT(YEAR FROM f.date_n_time) = '&v_cxl_year'
+		GROUP BY d.hall_type, "# of Total Rentals"
+		)
+	WHERE ranking <= 3
+	UNION ALL
+	SELECT ranking, "Item", "# of Cxls", total_refund, "% of Cxls(Rental/Ticket/Food)", "% of Cxls(Overall)", "% of Purchase", revenue_src
+	FROM(
+		SELECT RANK() OVER (ORDER BY COUNT(cxl_no) / "# of Total Tickets" * 100 DESC) ranking,
+		       g.title "Item",
+		       2 AS revenue_src,
+		       COUNT(cxl_no) "# of Cxls",
+		       ROUND(COUNT(cxl_no)  / :total_ticket_cxls * 100, 2) "% of Cxls(Rental/Ticket/Food)",
+		       ROUND(COUNT(cxl_no) / (:total_rental_cxls + :total_ticket_cxls + :total_food_cxls) * 100, 2) "% of Cxls(Overall)",
+		       ROUND(COUNT(cxl_no) / "# of Total Tickets" * 100, 2) "% of Purchase",
+		       SUM(a.refund) total_refund
+		FROM cancellation a JOIN ticket_claim_list b ON a.t_book_id = b.t_book_id
+				    JOIN ticket c ON b.ticket_id = c.ticket_id
+				    JOIN ticket_details d ON c.t_details_id = d.t_details_id
+				    JOIN movie_screening e ON d.show_id = e.show_id
+				    JOIN hall_schedule f ON e.skd_slot = f.skd_slot
+				    JOIN movie g ON e.movie_id = g.movie_id
+				    JOIN total_ticket_movie_view h ON g.title = h.title
+				    JOIN ticket_claim i ON b.t_claim_no = i.t_claim_no
+				    JOIN transaction j ON i.t_claim_no = j.t_claim_no
+		WHERE EXTRACT(YEAR FROM j.date_n_time) = '&v_cxl_year'
+		GROUP BY g.title, "# of Total Tickets"
+		)
+	WHERE ranking <= 3
+	UNION ALL
+	SELECT ranking, "Item", "# of Cxls", total_refund, "% of Cxls(Rental/Ticket/Food)", "% of Cxls(Overall)", "% of Purchase", revenue_src
+	FROM (
+		SELECT RANK() OVER (ORDER BY COUNT(cxl_no) / "# of Total Orders" * 100 DESC) ranking,
+		       3 AS revenue_src,
+		       e.description "Item",
+		       COUNT(cxl_no) "# of Cxls",
+		       ROUND(COUNT(cxl_no)  / :total_food_cxls * 100, 2) "% of Cxls(Rental/Ticket/Food)",
+		       ROUND(COUNT(cxl_no) / (:total_rental_cxls + :total_ticket_cxls + :total_food_cxls) * 100, 2) "% of Cxls(Overall)",
+		       ROUND(COUNT(cxl_no) / "# of Total Orders" * 100, 2) "% of Purchase",
+		       SUM(a.refund) total_refund
+		FROM cancellation a JOIN food_order_list b ON a.order_id = b.order_id
+				    JOIN food_order c ON b.f_order_no = c.f_order_no
+				    JOIN transaction d ON c.f_order_no = d.f_order_no
+				    JOIN food_menu e ON b.menu_id = e.menu_id
+				    JOIN total_order_menu_view f ON e.description = f.description
+		WHERE EXTRACT(YEAR FROM d.date_n_time) = '&v_cxl_year'
+		GROUP BY e.description, "# of Total Orders"
+		)
+	WHERE ranking <= 3
+)
+WHERE revenue_src = &v_cxl_src;
+
+CLEAR COLUMNS
+TTITLE OFF

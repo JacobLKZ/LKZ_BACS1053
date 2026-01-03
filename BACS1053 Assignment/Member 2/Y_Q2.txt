@@ -1,0 +1,53 @@
+cl scr
+SET LINESIZE 140
+SET PAGESIZE 40
+
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MON-YYYY';
+
+COLUMN cinema_id FORMAT a10
+COLUMN outlet Format a30 heading "MALL_NAME"
+
+SELECT cinema_id, outlet
+FROM cinema;
+
+
+ACCEPT v_cinema_id char PROMPT 'Enter the Cinema ID:'
+ACCEPT v_year char PROMPT 'Enter YEAR (2021/2022/2023):'
+ACCEPT v_month NUMBER PROMPT 'Enter the month in integer(07/08/09):'
+
+COLUMN movie_id FORMAT a8
+COLUMN cinema_id FORMAT a10
+COLUMN title Format a35 heading "MOVIE_SCREENING"
+
+TTITLE center 'Movie Theatering Period Report'
+BREAK ON cinema_id ON outlet
+
+CREATE OR REPLACE VIEW mov AS
+SELECT m.movie_id, m.title, m.start_date||' to '||m.end_date AS Movie_Period
+FROM movie m 
+JOIN movie_screening s ON s.movie_id = m.movie_id
+WHERE EXTRACT(year from start_date) = &v_year
+AND EXTRACT(month from start_date) = &v_month
+GROUP BY m.movie_id, m.title, m.start_date||' to '||m.end_date
+ORDER BY Movie_Period;
+
+CREATE OR REPLACE VIEW out AS
+SELECT m.movie_id, c.cinema_id, c.outlet
+FROM movie_screening m
+JOIN hall_schedule s ON s.skd_slot = m.skd_slot
+JOIN hall h ON h.hall_id = s.hall_id
+JOIN cinema c ON c.cinema_id = h.cinema_id;
+
+
+SELECT DISTINCT o.cinema_id, o.outlet, m.movie_id, m.title, m.Movie_Period
+FROM mov m
+JOIN out o ON m.movie_id = o.movie_id
+WHERE o.cinema_id = '&v_cinema_id'
+ORDER BY m.Movie_Period;
+
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+
+TTITLE OFF

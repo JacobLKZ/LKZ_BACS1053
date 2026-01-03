@@ -1,0 +1,77 @@
+--Terminal Settings
+SET LINESIZE 120;
+SET PAGESIZE 300;
+
+--date and time settings
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
+ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'HH24:MI';
+
+-- Set column formats
+COLUMN "Year" FORMAT A6
+COLUMN ranking FORMAT 999 HEADING "RANKING"
+COLUMN member FORMAT A10 HEADING "MEMBER ID"
+COLUMN name FORMAT A25 HEADING "MEMBER NAME"
+COLUMN last_visit_date FORMAT A10 HEADING "LAST VISIT"
+COLUMN average_spending FORMAT 9,999,999.99 HEADING "AVG SPENDS"
+COLUMN total_spending FORMAT 9,999,999.99 HEADING "TOTAL SPENDS"
+COLUMN visit_count FORMAT 999 HEADING "VISIT COUNT"
+
+cl scr
+
+PROMPT Member ranking average spents 
+
+--Get input from user
+
+ACCEPT v_year PROMPT 'Please enter the year for member average spends (2021/2022/2023):';
+ACCEPT v_limit PROMPT 'Enter ranking limit:';
+
+
+--Title for First Query
+TTITLE ON
+TTITLE CENTER 'Member ranking average spents Report' SKIP 1-
+       CENTER '=====================================================================' SKIP 1-
+       LEFT 'DATE: '_DATE -
+       RIGHT 'PAGE:' FORMAT 999 SQL.PNO SKIP 2 -
+ 	LEFT 'Year: &v_year' SKIP 2
+
+BREAK ON Year SKIP 1 on ranking on member on name on last_visit_date on visit_count;
+COMPUTE SUM LABEL 'Total' OF "average_spending" ON Year 
+COMPUTE SUM LABEL 'Total' OF "total_spending" ON Year
+SELECT 
+    '&v_year' AS "Year", 
+    ranking,
+    member, 
+    name, 
+    last_visit_date,
+    average_spending,
+    total_spending,
+    visit_count
+FROM (
+    SELECT 
+        RANK() OVER (ORDER BY AVG(t.grand_total) DESC) AS ranking,
+        m.member_id as member, 
+        m.name as name, 
+        MAX(t.date_n_time) as last_visit_date,
+        AVG(t.grand_total) as average_spending,
+        SUM(t.grand_total) as total_spending,
+        COUNT(*) as visit_count
+    FROM 
+        member m
+    JOIN 
+        transaction t ON m.member_id = t.member_id
+    WHERE
+        EXTRACT (YEAR FROM t.date_n_time) = '&v_year'
+    GROUP BY 
+        m.member_id, m.name, TO_CHAR(t.date_n_time, 'YYYY')
+    ORDER BY 
+        average_spending DESC
+)
+WHERE ranking <= '&v_limit';
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF
+
+
+

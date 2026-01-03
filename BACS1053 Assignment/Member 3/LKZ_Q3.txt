@@ -1,0 +1,89 @@
+CL SCR
+
+SET LINESIZE 172
+SET PAGESIZE 12
+SET VERIFY OFF
+SET FEEDBACK OFF
+SET RECSEP OFF
+
+COLUMN "Year" FORMAT 9999
+COLUMN "  Month  " FORMAT A9
+COLUMN "% of F2F Food Orders" HEADING '  Percentage of Number of   |Face-to-Face Food Orders (%)'
+COLUMN "% of Online Food Orders" HEADING 'Percentage of Number of|Online Food Orders (%)'
+COLUMN "% of Online Ticket Claims" HEADING 'Percentage of Number of|Online Ticket Claims (%)'
+COLUMN "% of F2F Ticket Claims" HEADING '    Percentage of Number of   |Face-to-Face Ticket Claims (%)' 
+
+ACCEPT v_year NUMBER PROMPT 'Enter year to view percentage of online ticket and food purchases (2021/2022/2023): '
+
+TTITLE LEFT 'Date: ' _DATE -
+       CENTER 'Percentage of Online Ticket and Food Purchases in '&v_year'' -
+       RIGHT 'Page:' FORMAT 999 SQL.PNO SKIP 2
+
+CREATE OR REPLACE VIEW online_tickets_view
+AS SELECT ROW_NUMBER() OVER (ORDER BY EXTRACT(YEAR FROM b.date_n_time)) rn,
+	  EXTRACT(YEAR FROM b.date_n_time) year,
+	  TO_CHAR(b.date_n_time, 'Month') month,
+	  COUNT(DISTINCT a.t_claim_no) "Online Tickets"
+FROM ticket_claim a JOIN transaction b ON a.t_claim_no = b.t_claim_no
+WHERE a.staff_id IS NULL
+GROUP BY EXTRACT(YEAR FROM b.date_n_time), TO_CHAR(b.date_n_time, 'Month')
+ORDER BY year, month DESC;
+
+CREATE OR REPLACE VIEW f2f_tickets_view
+AS SELECT ROW_NUMBER() OVER (ORDER BY EXTRACT(YEAR FROM b.date_n_time)) rn,
+	  EXTRACT(YEAR FROM b.date_n_time) year,
+	  TO_CHAR(b.date_n_time, 'Month') month,
+	  COUNT(DISTINCT a.t_claim_no) "F2F Tickets"
+FROM ticket_claim a JOIN transaction b ON a.t_claim_no = b.t_claim_no
+WHERE a.staff_id IS NOT NULL
+GROUP BY EXTRACT(YEAR FROM b.date_n_time), TO_CHAR(b.date_n_time, 'Month')
+ORDER BY year, month DESC;
+
+CREATE OR REPLACE VIEW online_food_view
+AS SELECT ROW_NUMBER() OVER (ORDER BY EXTRACT(YEAR FROM b.date_n_time)) rn,
+	  EXTRACT(YEAR FROM b.date_n_time) year,
+	  TO_CHAR(b.date_n_time, 'Month') month,
+	  COUNT(DISTINCT a.f_order_no) "Online Food Orders"
+FROM food_order a JOIN transaction b ON a.f_order_no = b.f_order_no
+WHERE a.staff_id IS NULL
+GROUP BY EXTRACT(YEAR FROM b.date_n_time), TO_CHAR(b.date_n_time, 'Month')
+ORDER BY year, month DESC;
+
+CREATE OR REPLACE VIEW f2f_food_view
+AS SELECT ROW_NUMBER() OVER (ORDER BY EXTRACT(YEAR FROM b.date_n_time)) rn,
+	  EXTRACT(YEAR FROM b.date_n_time) year,
+	  TO_CHAR(b.date_n_time, 'Month') month,
+	  COUNT(DISTINCT a.f_order_no) "F2F Food Orders"
+FROM food_order a JOIN transaction b ON a.f_order_no = b.f_order_no
+WHERE a.staff_id IS NOT NULL
+GROUP BY EXTRACT(YEAR FROM b.date_n_time), TO_CHAR(b.date_n_time, 'Month')
+ORDER BY year, month DESC;
+
+SELECT "% of F2F Food Orders",
+       "% of Online Food Orders",
+       "Total Food Orders",
+       month "  Month  ",
+       NULLIF(year, "Year") "Year",
+       month "  Month  ",
+       "Total Ticket Claims",
+       "% of Online Ticket Claims",
+       "% of F2F Ticket Claims"
+FROM (
+	SELECT ROUND("F2F Food Orders"/("Online Food Orders" + "F2F Food Orders") * 100, 2) "% of F2F Food Orders",
+	       ROUND("Online Food Orders"/("Online Food Orders" + "F2F Food Orders") * 100, 2) "% of Online Food Orders",
+	       "Online Food Orders" + "F2F Food Orders" "Total Food Orders",
+	       a.month,
+	       a.year,
+	       LAG(a.year) OVER(ORDER BY a.year) "Year",
+	       "Online Tickets" + "F2F Tickets" "Total Ticket Claims",
+	       ROUND("Online Tickets"/("Online Tickets" + "F2F Tickets") * 100, 2) "% of Online Ticket Claims",
+	       ROUND("F2F Tickets"/("Online Tickets" + "F2F Tickets") * 100, 2) "% of F2F Ticket Claims"
+	FROM online_tickets_view a JOIN f2f_tickets_view b ON a.rn = b.rn
+				   JOIN online_food_view c ON b.rn = c.rn
+				   JOIN f2f_food_view d ON c.rn = d.rn
+	WHERE a.year = &v_year
+	)
+;
+
+CLEAR COLUMNS
+TTITLE OFF

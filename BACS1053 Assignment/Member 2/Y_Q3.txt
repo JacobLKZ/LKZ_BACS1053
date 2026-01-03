@@ -1,0 +1,49 @@
+cl scr
+SET LINESIZE 120
+SET PAGESIZE 40
+
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MON-YYYY';
+
+ACCEPT year char PROMPT 'Enter YEAR (2021/2022/2023):'
+
+COLUMN member_id FORMAT a10
+COLUMN total_Price format 999.99
+COLUMN Tot_Spent_Food format 999.99
+COLUMN Avg_Spent_Food format 999.99
+
+
+TTITLE 'Average Member Spent on Food Report'
+BREAK ON member_id ON name ON Tot_Spent_Food ON visit_Times ON Avg_Spent_Food
+
+CREATE OR REPLACE VIEW aprice AS
+SELECT m.member_id, m.name, t.date_n_time,f.total_price
+FROM member m
+JOIN transaction t ON t.member_id = m.member_id
+JOIN food_order f ON f.f_order_no = t.f_order_no
+WHERE EXTRACT (YEAR FROM DATE_N_TIME) = &year
+AND f.total_price <> 0
+ORDER BY member_id;
+
+CREATE OR REPLACE VIEW sum AS
+SELECT * 
+FROM  ( SELECT m.member_id,SUM(total_price) AS Tot_Spent_Food,  	COUNT(m.member_id) AS Visit_Times, 	(SUM(total_price)/COUNT(m.member_id)) AS Avg_Spent_Food 
+	FROM member m 
+	JOIN transaction t ON t.member_id = m.member_id
+	JOIN food_order f ON f.f_order_no = t.f_order_no
+	WHERE EXTRACT (YEAR FROM DATE_N_TIME) = 2021
+	AND f.total_price <> 0
+	GROUP BY m.member_id
+	ORDER BY Avg_Spent_Food DESC
+)
+WHERE ROWNUM <= 10;
+
+SELECT a.member_id, a.name, a.date_n_time "DATE", a.total_price Spent_Per_Visit, s.Tot_Spent_Food, s.Visit_Times,s.Avg_Spent_Food
+FROM aprice a
+JOIN sum s ON a.member_id = s.member_id
+ORDER BY s.Avg_Spent_Food DESC;
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+
+TTITLE OFF

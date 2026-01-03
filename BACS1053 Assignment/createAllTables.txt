@@ -1,0 +1,204 @@
+CREATE TABLE cinema(
+	cinema_id CHAR(4) NOT NULL,
+	outlet VARCHAR(25)NULL,
+	region VARCHAR(25) NOT NULL,
+	no_of_halls NUMBER(1) NOT NULL CHECK(no_of_halls > 0),
+	PRIMARY KEY(cinema_id)
+);
+CREATE TABLE staff(
+	staff_id CHAR(4) NOT NULL,
+	name CHAR(25) NOT NULL,
+	job CHAR(31) NOT NULL,
+	email VARCHAR(30) NULL,
+	phone_no VARCHAR(12) NOT NULL, 
+	dob DATE NOT NULL,
+	hire_date DATE NOT NULL,
+	salary NUMBER(6, 2) NOT NULL,
+	cinema_id CHAR(4) NOT NULL,
+	PRIMARY KEY(staff_id),
+	FOREIGN KEY(cinema_id) REFERENCES cinema(cinema_id)
+);
+CREATE TABLE rental_rates(
+	hall_type VARCHAR(10) NOT NULL,
+	per_hour NUMBER(5, 2) NOT NULL,
+	half_day NUMBER(5, 2) NOT NULL,
+	full_day NUMBER(6, 2) NOT NULL,
+	special NUMBER(5, 2) NOT NULL,
+	PRIMARY KEY(hall_type)
+);
+CREATE TABLE hall(
+	hall_id CHAR(6) NOT NULL,
+	cinema_id CHAR(4) NOT NULL,
+	hall_type VARCHAR(10) NOT NULL,
+	capacity NUMBER(3) NOT NULL,
+	PRIMARY KEY(hall_id),
+	FOREIGN KEY(cinema_id) REFERENCES cinema(cinema_id),
+	FOREIGN KEY(hall_type) REFERENCES rental_rates(hall_type)
+);
+CREATE TABLE hall_schedule(
+	skd_slot CHAR(12) NOT NULL,
+	hall_id CHAR(6) NOT NULL,
+	skd_date DATE NOT NULL,
+	status CHAR(1) NOT NULL,
+	PRIMARY KEY(skd_slot),
+	FOREIGN KEY(hall_id) REFERENCES hall(hall_id)
+);
+CREATE TABLE rental(
+	rental_id CHAR(5) NOT NULL,
+	activity VARCHAR(50) NULL,
+	skd_slot CHAR(12) NOT NULL,
+	start_time DATE NOT NULL,
+	end_time DATE NOT NULL,
+	price NUMBER(6, 2) NOT NULL,
+	staff_id CHAR(4) NULL,
+	PRIMARY KEY(rental_id),
+	FOREIGN KEY(skd_slot) REFERENCES hall_schedule(skd_slot),
+	FOREIGN KEY(staff_id) REFERENCES staff(staff_id)
+);
+CREATE TABLE movie(
+	movie_id CHAR(5) NOT NULL,
+	title VARCHAR(50) NOT NULL,
+	genre VARCHAR(9) NULL,
+	age_rating VARCHAR(4) NULL,
+	duration NUMBER(3) NOT NULL,
+	start_date DATE NOT NULL,
+	end_date DATE NULL,
+	PRIMARY KEY(movie_id)
+);
+CREATE TABLE movie_screening(
+	show_id CHAR(8) NOT NULL,
+	skd_slot CHAR(12) NOT NULL,
+	movie_id CHAR(5) NOT NULL,
+	show_time DATE NOT NULL,
+	comp_tickets CHAR(1) NOT NULL,
+	PRIMARY KEY(show_id),
+	FOREIGN KEY(skd_slot) REFERENCES hall_schedule(skd_slot),
+	FOREIGN KEY(movie_id) REFERENCES movie(movie_id)
+);
+CREATE TABLE ticket_details(
+	t_details_id CHAR(9) NOT NULL,
+	show_id CHAR(8) NOT NULL,
+	seat_type VARCHAR(10) NOT NULL,
+	dflt_price NUMBER(4, 2) NOT NULL,
+	low_price NUMBER(4, 2) NULL,
+	pts_reward NUMBER(2) NOT NULL,
+	pts_worth NUMBER(3) NULL,
+	PRIMARY KEY(t_details_id),
+	FOREIGN KEY(show_id) REFERENCES movie_screening(show_id)
+);
+CREATE TABLE ticket(
+	ticket_id CHAR(11) NOT NULL,
+	t_details_id CHAR(9) NOT NULL,
+	status CHAR(1) NOT NULL,
+	PRIMARY KEY(ticket_id),
+	FOREIGN KEY(t_details_id) REFERENCES ticket_details(t_details_id)
+);
+CREATE TABLE ticket_claim(
+	t_claim_no CHAR(6) NOT NULL,
+	staff_id CHAR(4) NULL,
+	total_price NUMBER(5) NOT NULL,
+	net_pts NUMBER(5) NOT NULL,
+	PRIMARY KEY(t_claim_no),
+	FOREIGN KEY(staff_id) REFERENCES staff(staff_id)
+);
+CREATE TABLE ticket_claim_list(
+	t_book_id CHAR(6) NOT NULL,
+	t_claim_no CHAR(6) NOT NULL,
+	ticket_id CHAR(11) NOT NULL,
+	claim_method CHAR(1) NOT NULL,
+	PRIMARY KEY(t_book_id),
+	FOREIGN KEY(ticket_id) REFERENCES ticket(ticket_id),
+	FOREIGN KEY(t_claim_no) REFERENCES ticket_claim(t_claim_no)
+);
+CREATE TABLE food_menu(
+	menu_id CHAR(4) NOT NULL,
+	description VARCHAR(50) NOT NULL,
+	price NUMBER(4,2) NOT NULL,
+	pts_worth NUMBER(3) NOT NULL,
+	PRIMARY KEY(menu_id)
+);
+CREATE TABLE food_order(
+	f_order_no CHAR(5) NOT NULL,
+	total_price NUMBER(10,2) NOT NULL,
+	total_pts_spent NUMBER NOT NULL,
+	staff_id CHAR(4) NULL,                      
+	PRIMARY KEY(f_order_no),
+	FOREIGN KEY(staff_id) REFERENCES staff(staff_id)	
+);
+CREATE TABLE food_order_list(
+	order_id CHAR(5) NOT NULL,
+	f_order_no CHAR(5) NOT NULL,
+	menu_id CHAR(4) NOT NULL,
+	quantity NUMBER(3) NOT NULL,
+	overall_price NUMBER(7,2) NOT NULL,
+	pts_spent NUMBER(5) NOT NULL,
+	PRIMARY KEY(order_id),
+	FOREIGN KEY(f_order_no) REFERENCES food_order(f_order_no),
+	FOREIGN KEY(menu_id) REFERENCES food_menu(menu_id)
+);
+CREATE TABLE member(
+	member_id CHAR(5) NOT NULL,
+	name VARCHAR(30) NOT NULL,
+	dob DATE NOT NULL,
+	email VARCHAR(35) NULL,
+	reg_date DATE NOT NULL,
+	exp_date DATE NOT NULL,
+	void_date DATE NOT NULL,
+	pts NUMBER(5) NOT NULL,
+	PRIMARY KEY(member_id)
+);
+CREATE TABLE prize(
+	prize_id CHAR(4) NOT NULL,
+	description VARCHAR(60) NOT NULL,
+	pts_worth NUMBER(3) NOT NULL,
+	start_date DATE NOT NULL,
+	end_date DATE NULL,
+	PRIMARY KEY(prize_id)
+);
+CREATE TABLE prize_redemption(
+	redemption_no CHAR(5) NOT NULL,
+	member_id CHAR(5) NOT NULL,
+	total_pts_spent NUMBER NOT NULL,
+	staff_id CHAR(4) NULL,
+	PRIMARY KEY(redemption_no),
+	FOREIGN KEY(member_id) REFERENCES member(member_id),
+	FOREIGN KEY(staff_id) REFERENCES staff(staff_id)
+);
+CREATE TABLE redemption_list(
+	redemption_no CHAR(5) NOT NULL,
+	prize_id CHAR(4) NOT NULL,
+	quantity NUMBER NOT NULL,
+	pts_spent NUMBER NOT NULL,
+	PRIMARY KEY(redemption_no, prize_id),
+	FOREIGN KEY(redemption_no) REFERENCES prize_redemption(redemption_no),
+	FOREIGN KEY(prize_id) REFERENCES prize(prize_id)
+);
+CREATE TABLE transaction(
+	date_n_time DATE NOT NULL,
+	rental_id CHAR(5) NULL,
+	t_claim_no CHAR(6) NULL,
+	f_order_no CHAR(5) NULL,
+	bundle_discount NUMBER(5,2) NOT NULL,
+	member_id CHAR(5) NULL,
+	renew_membership CHAR(1) NULL,
+	grand_total NUMBER(10,2) NOT NULL,
+	net_pts NUMBER NOT NULL,
+	PRIMARY KEY (date_n_time),
+	FOREIGN KEY(rental_id) REFERENCES rental(rental_id),
+	FOREIGN KEY(t_claim_no) REFERENCES ticket_claim(t_claim_no),
+	FOREIGN KEY(f_order_no) REFERENCES food_order(f_order_no),
+	FOREIGN KEY(member_id) REFERENCES member(member_id)
+);
+CREATE TABLE cancellation(
+	cxl_no CHAR(4) NOT NULL,
+	staff_id CHAR(4) NULL,
+	t_book_id CHAR(6) NULL,
+	rental_id CHAR(5) NULL,
+	order_id CHAR(5) NULL,
+	refund NUMBER(5, 2) NOT NULL,
+	PRIMARY KEY(cxl_no),
+	FOREIGN KEY(staff_id) REFERENCES staff(staff_id),
+	FOREIGN KEY(t_book_id) REFERENCES ticket_claim_list(t_book_id),
+	FOREIGN KEY(rental_id) REFERENCES rental(rental_id),
+	FOREIGN KEY(order_id) REFERENCES food_order_list(order_id)
+);

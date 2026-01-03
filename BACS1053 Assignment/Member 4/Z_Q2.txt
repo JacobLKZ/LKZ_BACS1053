@@ -1,0 +1,51 @@
+total revenue from food order for each cinema , order by desc
+
+SET LINESIZE 120
+SET PAGESIZE 60
+
+column cinema_outlet heading 'Cinema Outlet'
+column july_total_food_ordered heading 'July Sales'
+column july_total_food_ordered format $999.00
+column august_total_food_ordered heading 'August Sales'
+column august_total_food_ordered format $999.00
+column total_items_ordered heading 'Total Items Ordered'
+column average_food_price heading 'Average Price'
+column average_food_price format $999.00
+column total_revenue heading 'Total Revenue'
+column total_revenue format $9999.00
+
+ttitle center 'Food Sales Report for Year &user_year' skip 1-
+       center '=============================================' skip 2
+
+ACCEPT user_year PROMPT 'Enter the year (2021/2022/2023): ' 
+
+SELECT
+    c.outlet AS cinema_outlet,
+    SUM(CASE WHEN EXTRACT(MONTH FROM t.date_n_time) = 7 THEN fm.price ELSE 0 END) AS july_total_food_ordered,
+    SUM(CASE WHEN EXTRACT(MONTH FROM t.date_n_time) = 8 THEN fm.price ELSE 0 END) AS august_total_food_ordered,
+    COUNT(fm.menu_id) AS total_items_ordered,
+    ROUND(AVG(fm.price), 2) AS average_food_price,
+    SUM(fm.price) AS total_revenue
+FROM
+    cinema c
+LEFT JOIN
+    staff s ON c.cinema_id = s.cinema_id
+LEFT JOIN
+    food_order fo ON s.staff_id = fo.staff_id OR (s.staff_id IS NULL AND fo.staff_id IS NULL)
+LEFT JOIN
+    food_order_list fol ON fo.f_order_no = fol.f_order_no
+LEFT JOIN
+    food_menu fm ON fol.menu_id = fm.menu_id
+LEFT JOIN
+    transaction t ON fo.f_order_no = t.f_order_no
+WHERE
+    EXTRACT(MONTH FROM t.date_n_time) IN (7, 8)
+    AND EXTRACT(YEAR FROM t.date_n_time) = &user_year
+GROUP BY
+    c.outlet
+ORDER BY
+    total_revenue DESC;
+-- 
+clear columns
+clear breaks
+ttitle off

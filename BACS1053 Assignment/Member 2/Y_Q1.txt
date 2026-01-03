@@ -1,0 +1,65 @@
+cl scr
+SET LINESIZE 130
+SET PAGESIZE 40
+
+ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MON-YYYY';
+
+ACCEPT year char PROMPT 'Enter YEAR (2021/2022/2023):'
+
+COLUMN MENU_ID FORMAT A7
+COLUMN UNIT_PRICE FORMAT 99.99
+COLUMN REVENUE_SALES FORMAT 9999.99
+
+TTITLE 'Top 5 Favourite Food Report'
+
+CREATE OR REPLACE VIEW fav AS
+SELECT fm.menu_id, fm.description, fm.price AS Unit_Price
+FROM food_menu fm
+JOIN food_order_list fo ON (fo.menu_id = fm.menu_id)
+GROUP BY fm.menu_id, fm.description, fm.price;
+
+CREATE OR REPLACE VIEW dnt AS
+SELECT F.F_ORDER_NO,MENU_ID,QUANTITY
+FROM FOOD_ORDER F 
+JOIN FOOD_ORDER_LIST L ON (F.F_ORDER_NO = L.F_ORDER_NO)
+JOIN TRANSACTION T ON (F.F_ORDER_NO = T.F_ORDER_NO)
+WHERE EXTRACT (YEAR FROM DATE_N_TIME) = &year;
+
+CREATE OR REPLACE VIEW tquan AS
+SELECT F.MENU_ID,F.DESCRIPTION,F.UNIT_PRICE,SUM(D.QUANTITY) AS Tot_Quantity
+FROM FAV F
+JOIN DNT D ON (F.MENU_ID = D.MENU_ID)
+GROUP BY F.MENU_ID,F.DESCRIPTION,F.UNIT_PRICE
+ORDER BY SUM(D.QUANTITY) DESC;
+
+Create or replace view t3_food AS
+SELECT *
+FROM (SELECT menu_id, Tot_Quantity, RANK() OVER(ORDER BY tot_quantity DESC) AS Fav_Food_Rnk
+FROM tquan
+)
+WHERE rownum < 6;
+
+VAR total number;
+BEGIN
+	SELECT sum(price)
+	into :total
+	from food_menu;
+end;
+/
+VAR average number;
+BEGIN
+	SELECT count(menu_id)
+	into :average
+	from food_menu;
+end;
+/
+
+SELECT Q.menu_id, Q.description, Q.Unit_Price, T.tot_quantity, (Q.Unit_Price * T.tot_quantity) AS Revenue_Sales, T.fav_food_rnk
+FROM tquan Q
+JOIN T3_FOOD T ON (q.menu_id = t.menu_id);
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+
+TTITLE OFF

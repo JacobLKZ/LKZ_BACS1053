@@ -1,0 +1,542 @@
+--Terminal Settings
+SET LINESIZE 120;
+SET PAGESIZE 300;
+
+--date and time settings
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
+ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'HH24:MI';
+
+--COLUMN Settings
+COLUMN Month FORMAT A8 
+COLUMN total_earnings FORMAT 9,999,999.99 HEADING "Total Earning"
+COLUMN "ticket_percentage" FORMAT 9999.99 HEADING "Ticket earn (%)"
+COLUMN "food_percentage" FORMAT 9999.99 HEADING "Food earn (%)"
+COLUMN "rental_percentage" FORMAT 9999.99 HEADING "Rental earn (%)"
+COLUMN "rentalnFood_percentage" FORMAT 9999.99 HEADING "Rental n Food earn (%)"
+COLUMN "ticketnFood_percentage" FORMAT 9999.99 HEADING "Ticket n Food earn (%)"
+ 
+
+cl scr
+
+PROMPT Monthly Sales Analysis Report
+PROMPT
+PROMPT
+-- Get input from user
+ACCEPT v_year PROMPT 'Enter Year in (2021/2022/2023):'
+
+
+--Title 
+TTITLE ON
+TTITLE CENTER 'Monthly Sales Analysis Report' SKIP 1-
+       CENTER '=====================================================================' SKIP 1-
+       LEFT 'DATE: '_DATE -
+       RIGHT 'PAGE:' FORMAT 999 SQL.PNO SKIP 2 -
+ 	LEFT 'Year: &v_year' -
+       RIGHT 'Month : June - Aug' SKIP 1-
+
+
+
+CREATE OR REPLACE VIEW monthly_sales_view AS
+SELECT 
+	'JUNE' AS Month,
+    	(total_earningsY-CancelTicket-CancelFood-CancelRental) AS total_earnings,
+    	((ticket_total-CancelTicket) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticket_percentage,
+    	((food_total-CancelFood) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS food_percentage,
+    	((rental_total-CancelRental) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rental_percentage,
+    	(rentalnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rentalnFood_percentage,
+    	(ticketnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticketnFood_percentage
+FROM (
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticket_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NULL
+) tt,
+(SELECT
+        NVL(SUM(grand_total), 0) AS food_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+        AND rental_id IS NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) ft,
+(SELECT
+        NVL(SUM(grand_total), 0) AS rental_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NULL
+) rt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rentalnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) rft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticketnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NOT NULL
+) tft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earnings
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+) te,
+(SELECT
+        NVL(SUM(grand_total), 0) AS total_earningsY
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+)tey,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelTicket
+    FROM
+        cancellation c
+    JOIN
+	ticket_claim_list tcl on c.T_book_id=tcl.T_book_id
+    JOIN
+	ticket_claim tc on tcl.T_claim_no = tc.T_claim_no
+    JOIN
+	transaction t on tc.T_claim_no = t.T_claim_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+)ct,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelFood
+    FROM
+        cancellation c
+    JOIN
+	food_order_list fol on c.order_id=fol.order_id
+    JOIN
+	food_order fo on fol.F_order_no=fo.F_order_no
+    JOIN
+	transaction t on fo.F_order_no=t.F_order_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+)cf,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelRental
+    FROM
+        cancellation c
+    JOIN
+	rental r on c.rental_id=r.rental_id
+    JOIN
+	transaction t on r.rental_id=t.rental_id
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 6
+)cr
+UNION ALL
+SELECT
+	'JULY' AS Month,
+    	(total_earningsY-CancelTicket-CancelFood-CancelRental) AS total_earnings,
+    	((ticket_total-CancelTicket) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticket_percentage,
+    	((food_total-CancelFood) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS food_percentage,
+    	((rental_total-CancelRental) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rental_percentage,
+    	(rentalnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rentalnFood_percentage,
+    	(ticketnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticketnFood_percentage
+FROM (
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticket_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NULL
+) tt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS food_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+        AND rental_id IS NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) ft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rental_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NULL
+) rt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rentalnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) rft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticketnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NOT NULL
+) tft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earnings
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+) te,
+(SELECT
+        NVL(SUM(grand_total), 0) AS total_earningsY
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+)tey,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelTicket
+    FROM
+        cancellation c
+    JOIN
+	ticket_claim_list tcl on c.T_book_id=tcl.T_book_id
+    JOIN
+	ticket_claim tc on tcl.T_claim_no = tc.T_claim_no
+    JOIN
+	transaction t on tc.T_claim_no = t.T_claim_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+)ct,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelFood
+    FROM
+        cancellation c
+    JOIN
+	food_order_list fol on c.order_id=fol.order_id
+    JOIN
+	food_order fo on fol.F_order_no=fo.F_order_no
+    JOIN
+	transaction t on fo.F_order_no=t.F_order_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+)cf,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelRental
+    FROM
+        cancellation c
+    JOIN
+	rental r on c.rental_id=r.rental_id
+    JOIN
+	transaction t on r.rental_id=t.rental_id
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 7
+)cr
+UNION ALL
+SELECT
+    'AUG' AS Month,
+   (total_earningsY-CancelTicket-CancelFood-CancelRental) AS total_earnings,
+    	((ticket_total-CancelTicket) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticket_percentage,
+    	((food_total-CancelFood) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS food_percentage,
+    	((rental_total-CancelRental) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rental_percentage,
+    	(rentalnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rentalnFood_percentage,
+    	(ticketnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticketnFood_percentage
+FROM (
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticket_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NULL
+) tt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS food_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+        AND rental_id IS NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) ft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rental_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NULL
+) rt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rentalnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) rft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticketnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NOT NULL
+) tft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earnings
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+) te,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earningsY
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+)tey,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelTicket
+    FROM
+        cancellation c
+    JOIN
+	ticket_claim_list tcl on c.T_book_id=tcl.T_book_id
+    JOIN
+	ticket_claim tc on tcl.T_claim_no = tc.T_claim_no
+    JOIN
+	transaction t on tc.T_claim_no = t.T_claim_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+)ct,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelFood
+    FROM
+        cancellation c
+    JOIN
+	food_order_list fol on c.order_id=fol.order_id
+    JOIN
+	food_order fo on fol.F_order_no=fo.F_order_no
+    JOIN
+	transaction t on fo.F_order_no=t.F_order_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+)cf,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelRental
+    FROM
+        cancellation c
+    JOIN
+	rental r on c.rental_id=r.rental_id
+    JOIN
+	transaction t on r.rental_id=t.rental_id
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+	AND EXTRACT(MONTH FROM date_n_time) = 8
+)cr
+UNION ALL
+SELECT
+    'total' AS Month,
+   (total_earningsY-CancelTicket-CancelFood-CancelRental) AS total_earnings,
+    	((ticket_total-CancelTicket) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticket_percentage,
+    	((food_total-CancelFood) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS food_percentage,
+    	((rental_total-CancelRental) / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rental_percentage,
+    	(rentalnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS rentalnFood_percentage,
+    	(ticketnFood_total / (total_earningsY-CancelTicket-CancelFood-CancelRental)) * 100 AS ticketnFood_percentage
+FROM (
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticket_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NULL
+) tt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS food_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+        AND rental_id IS NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) ft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rental_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NULL
+) rt,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS rentalnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+        AND rental_id IS NOT NULL
+        AND t_claim_no IS NULL
+        AND f_order_no IS NOT NULL
+) rft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS ticketnFood_total
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+        AND rental_id IS NULL
+        AND t_claim_no IS NOT NULL
+        AND f_order_no IS NOT NULL
+) tft,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earnings
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+) te,
+(
+    SELECT
+        NVL(SUM(grand_total), 0) AS total_earningsY
+    FROM
+        transaction
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+)tey,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelTicket
+    FROM
+        cancellation c
+    JOIN
+	ticket_claim_list tcl on c.T_book_id=tcl.T_book_id
+    JOIN
+	ticket_claim tc on tcl.T_claim_no = tc.T_claim_no
+    JOIN
+	transaction t on tc.T_claim_no = t.T_claim_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+)ct,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelFood
+    FROM
+        cancellation c
+    JOIN
+	food_order_list fol on c.order_id=fol.order_id
+    JOIN
+	food_order fo on fol.F_order_no=fo.F_order_no
+    JOIN
+	transaction t on fo.F_order_no=t.F_order_no
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+)cf,
+(SELECT
+        NVL(SUM(refund), 0) AS CancelRental
+    FROM
+        cancellation c
+    JOIN
+	rental r on c.rental_id=r.rental_id
+    JOIN
+	transaction t on r.rental_id=t.rental_id
+    WHERE
+        EXTRACT(YEAR FROM date_n_time) = '&v_year'
+)cr;
+
+
+
+--Display view
+SELECT * FROM monthly_sales_view;
+
+
+CLEAR COLUMNS
+CLEAR BREAKS
+CLEAR COMPUTES
+TTITLE OFF
+
+

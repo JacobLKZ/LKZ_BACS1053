@@ -1,0 +1,138 @@
+CL SCR
+
+SET LINESIZE 64
+SET PAGESIZE 38
+SET VERIFY OFF
+SET FEEDBACK OFF
+
+COLUMN "Rank" FORMAT 99
+COLUMN "Year" FORMAT 9999
+COLUMN "Trend (%)" FORMAT A9
+COLUMN py_year_rvn_diff FORMAT A19
+COLUMN py_year_rvn_diff HEADING '   Difference in   |Revenue Compared to| Previous Year (RM)'
+
+ACCEPT v_hall_type_num NUMBER PROMPT 'Enter number of most trending hall types to view: '
+ACCEPT v_start_year NUMBER PROMPT 'Enter starting year (2021/2022): '
+ACCEPT v_end_year NUMBER PROMPT 'Enter ending year (2022/2023): '
+
+TTITLE CENTER 'TOP '&v_hall_type_num' Most Trending Hall Types' SKIP -
+       LEFT 'Date: ' _DATE -
+       RIGHT 'Page:' FORMAT 999 SQL.PNO SKIP 2
+
+CREATE OR REPLACE VIEW hall_type_count_view
+AS SELECT
+	hall_type, COUNT(*) no_of_halls
+	FROM hall
+	GROUP BY hall_type;
+
+CREATE OR REPLACE VIEW yearly_ticket_revenue_view
+AS SELECT
+	g.hall_type,
+	EXTRACT(YEAR FROM f.skd_date) year,
+	SUM(a.total_price)/h.no_of_halls avg_ticket_earning
+	FROM ticket_claim a JOIN ticket_claim_list b ON a.t_claim_no = b.t_claim_no
+		    	    JOIN ticket c ON b.ticket_id = c.ticket_id
+		    	    JOIN ticket_details d ON c.t_details_id = d.t_details_id
+		    	    JOIN movie_screening e ON d.show_id = e.show_id
+		    	    JOIN hall_schedule f ON e.skd_slot = f.skd_slot
+		    	    JOIN hall g ON f.hall_id = g.hall_id
+		    	    JOIN hall_type_count_view h ON g.hall_type = h.hall_type
+	GROUP BY g.hall_type, EXTRACT(YEAR FROM skd_date), h.no_of_halls;
+
+CREATE OR REPLACE VIEW year_compare_view
+AS SELECT
+	c.hall_type,
+	LAG(c.hall_type) OVER(
+			   PARTITION BY c.hall_type
+			   ORDER BY EXTRACT(YEAR FROM skd_date)
+			   )next_hall_type,
+	EXTRACT(YEAR FROM b.skd_date) year
+FROM rental a JOIN hall_schedule b ON a.skd_slot = b.skd_slot
+	      JOIN hall c ON b.hall_id = c.hall_id
+	      JOIN yearly_ticket_revenue_view d ON c.hall_type = d.hall_type AND EXTRACT(YEAR FROM b.skd_date) = d.year
+GROUP BY c.hall_type, EXTRACT(YEAR FROM skd_date), d.avg_ticket_earning;
+
+CREATE OR REPLACE VIEW hall_trend_view
+AS SELECT
+	c.hall_type,
+	d.next_hall_type,
+	EXTRACT(YEAR FROM b.skd_date) year,
+	ROUND(AVG(a.price) + e.avg_ticket_earning, 2) yearly_earning
+FROM rental a JOIN hall_schedule b ON a.skd_slot = b.skd_slot
+	      JOIN hall c ON b.hall_id = c.hall_id
+	      JOIN year_compare_view d ON c.hall_type = d.hall_type AND EXTRACT(YEAR FROM b.skd_date) = d.year
+	      JOIN yearly_ticket_revenue_view e ON c.hall_type = e.hall_type AND EXTRACT(YEAR FROM b.skd_date) = e.year
+GROUP BY c.hall_type, d.next_hall_type, EXTRACT(YEAR FROM skd_date), e.avg_ticket_earning
+ORDER BY c.hall_type, year;
+
+
+SELECT NULLIF(ranking, ranking_2) "Rank",
+       NULLIF(hall_type, hall_type_2) "Hall Type",
+       year "Year",
+       yearly_earning "Revenue (RM)",
+       py_year_rvn_diff,
+       "Trend (%)"
+FROM(
+	SELECT ranking,
+	       LAG(ranking) OVER (PARTITION BY hall_type ORDER BY year) ranking_2,
+	       hall_type,
+	       LAG(hall_type) OVER (PARTITION BY hall_type ORDER BY year) hall_type_2,
+	       year,
+	       yearly_earning,
+	       py_year_rvn_diff,
+	       "Trend (%)"
+	FROM(
+		SELECT DENSE_RANK() OVER(ORDER BY diff_for_hall DESC) ranking,
+		       hall_type,
+		       year,
+		       yearly_earning,
+		       NVL(TO_CHAR(py_year_rvn_diff), '        -') py_year_rvn_diff,
+		       NVL(TO_CHAR("Trend (%)"), '    -') "Trend (%)"
+		FROM (
+			SELECT hall_type,
+			       year,
+			       yearly_earning,
+			       py_year_rvn_diff,
+			       "Trend (%)",
+			       CASE 
+				   WHEN trend_diff > -100 AND trend_diff < 100
+				   THEN trend_diff
+				   ELSE LEAD (trend_diff IGNORE NULLS) OVER(PARTITION BY hall_type ORDER BY year)
+			       END diff_for_hall
+			FROM (
+				SELECT rn,
+				       hall_type,
+				       year,
+				       yearly_earning,
+				       yearly_earning - py_sales py_year_rvn_diff,
+				       ROUND((yearly_earning / py_sales - 1) * 100, 2) "Trend (%)",
+				       CASE 
+					   WHEN rn = '&v_end_year' - '&v_start_year' + 1
+					   THEN ROUND((yearly_earning / py_sales - 1) * 100, 2) + NVL(LAG(ROUND((yearly_earning/ py_sales - 1) * 100, 2)) OVER(
+																			       PARTITION BY hall_type
+																			       ORDER BY year
+																			      ), 0)
+					   ELSE NULL
+				       END trend_diff
+				FROM (
+					SELECT ROW_NUMBER() OVER(PARTITION BY hall_type ORDER BY year) rn,
+					       hall_type,
+					       year,
+					       yearly_earning,
+					       LAG(yearly_earning) OVER(
+							PARTITION BY hall_type
+							ORDER BY year
+							)py_sales
+					FROM hall_trend_view
+					WHERE year BETWEEN '&v_start_year' AND '&v_end_year'
+					)
+				)
+			)
+		)
+	WHERE ranking <= '&v_hall_type_num'
+	ORDER BY ranking, hall_type, year
+	)
+;
+
+CLEAR COLUMNS
+TTITLE OFF

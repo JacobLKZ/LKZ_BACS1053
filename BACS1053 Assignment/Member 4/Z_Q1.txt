@@ -1,0 +1,32 @@
+SELECT
+    c.outlet AS cinema_outlet,
+    m.title AS movie_title,
+    EXTRACT(YEAR FROM TO_DATE(SUBSTR(ms.skd_slot, 1, 6), 'YYMMDD')) AS screening_year,
+    SUM(CASE WHEN t.status = 'N' THEN 1 ELSE 0 END) AS total_tickets_sold,
+    SUM(CASE WHEN t.status = 'N' THEN td.dflt_price ELSE 0 END) AS total_revenue,
+    CASE WHEN SUM(CASE WHEN t.status = 'N' THEN 1 ELSE 0 END) > 0
+        THEN SUM(CASE WHEN t.status = 'N' THEN td.dflt_price ELSE 0 END) / SUM(CASE WHEN t.status = 'N' THEN 1 ELSE 0 END)
+        ELSE 0 END AS average_ticket_price
+FROM
+    cinema c
+JOIN
+    hall h ON c.cinema_id = h.cinema_id
+JOIN
+    hall_schedule hs ON h.hall_id = hs.hall_id
+JOIN
+    movie_screening ms ON hs.skd_slot = ms.skd_slot
+JOIN
+    movie m ON ms.movie_id = m.movie_id
+LEFT OUTER JOIN ticket_details td ON ms.show_id = td.show_id
+LEFT OUTER JOIN ticket t ON td.t_details_id = t.t_details_id
+WHERE
+    EXTRACT(YEAR FROM TO_DATE(SUBSTR(ms.skd_slot, 1, 6), 'YYMMDD')) = &user_year
+GROUP BY
+    c.outlet, 
+    m.title, 
+    EXTRACT(YEAR FROM TO_DATE(SUBSTR(ms.skd_slot, 1, 6), 'YYMMDD'))
+ORDER BY
+    cinema_outlet, 
+    total_tickets_sold DESC,
+    movie_title, 
+    screening_year;

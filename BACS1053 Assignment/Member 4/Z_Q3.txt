@@ -1,0 +1,46 @@
+set linesize 100
+set pagesize 60
+
+column member_id format A10 heading 'ID'
+column member_name format A25 heading 'Member Name'
+column total_prizes_redeemed heading 'Total Prizes Redeemed'
+column total_prize_worth heading 'Total Prize Worth'
+column total_prize_worth format $9999.00
+column average_prize_worth heading'Average Prize Worth'
+column average_prize_worth format $9999.00
+
+ACCEPT user_year PROMPT 'Enter the year (2021/2022/2023): '
+
+ttitle center 'Member Prize Redemption Analysis For Year &user_year' skip 1-
+       center '========================================================' skip 2
+
+SELECT
+    m.member_id,
+    m.name AS member_name,
+    COUNT(rl.prize_id) AS total_prizes_redeemed,
+    SUM(p.pts_worth) AS total_prize_worth,
+    ROUND(AVG(p.pts_worth), 2) AS average_prize_worth
+FROM
+    member m
+JOIN
+    prize_redemption pr ON m.member_id = pr.member_id
+JOIN
+    redemption_list rl ON pr.redemption_no = rl.redemption_no
+JOIN
+    prize p ON rl.prize_id = p.prize_id
+WHERE
+    (
+        '&user_year' IS NULL
+        OR
+        EXTRACT(YEAR FROM p.start_date) = TO_NUMBER('&user_year')
+    )
+GROUP BY
+    m.member_id,
+    m.name
+ORDER BY
+    total_prizes_redeemed DESC;
+
+-- 
+clear columns
+clear breaks
+ttitle off
